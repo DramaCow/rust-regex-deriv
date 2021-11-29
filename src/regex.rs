@@ -75,136 +75,112 @@ impl RegEx {
 
     #[must_use]
     pub fn set(a: CharSet) -> Self {
-        fn mk_set(a: CharSet) -> RegEx {
-            if a.is_empty() {
-                RegEx::new(Operator::None)
-            } else {
-                RegEx::new(Operator::Set(a))
-            }
+        if a.is_empty() {
+            RegEx::new(Operator::None)
+        } else {
+            RegEx::new(Operator::Set(a))
         }
-
-        mk_set(a)
     }
 
     #[must_use]
     pub fn then(&self, other: &Self) -> Self {
-        fn mk_cat(r: &RegEx, s: &RegEx) -> RegEx {
-            fn cat_aux<'a, A, B>(res1: A, res2: B) -> RegEx
-            where
-                A: IntoIterator<Item=&'a RegEx>,
-                B: IntoIterator<Item=&'a RegEx>,
-            {
-                RegEx::new(Operator::Cat(res1.into_iter().chain(res2).cloned().collect()))
-            }
-        
-            match (r.operator(), s.operator()) {
-                (_                , Operator::Epsilon) => r.clone(),
-                (Operator::Epsilon, _                ) => s.clone(),
-                (_                , Operator::None   ) => RegEx::new(Operator::None),
-                (Operator::None   , _                ) => RegEx::new(Operator::None),
-                (Operator::Cat(a) , Operator::Cat(b) ) => cat_aux(a, b),
-                (_                , Operator::Cat(b) ) => cat_aux(once(r), b),
-                (Operator::Cat(a) , _                ) => cat_aux(a, once(s)),
-                (_                , _                ) => cat_aux(once(r), once(s)),
-            }
+        fn cat_aux<'a, A, B>(res1: A, res2: B) -> RegEx
+        where
+            A: IntoIterator<Item=&'a RegEx>,
+            B: IntoIterator<Item=&'a RegEx>,
+        {
+            RegEx::new(Operator::Cat(res1.into_iter().chain(res2).cloned().collect()))
         }
-
-        mk_cat(self, other)
+    
+        match (self.operator(), other.operator()) {
+            (_                , Operator::Epsilon) => self.clone(),
+            (Operator::Epsilon, _                ) => other.clone(),
+            (_                , Operator::None   ) => RegEx::new(Operator::None),
+            (Operator::None   , _                ) => RegEx::new(Operator::None),
+            (Operator::Cat(a) , Operator::Cat(b) ) => cat_aux(a, b),
+            (_                , Operator::Cat(b) ) => cat_aux(once(self), b),
+            (Operator::Cat(a) , _                ) => cat_aux(a, once(other)),
+            (_                , _                ) => cat_aux(once(self), once(other)),
+        }
     }
 
     #[must_use]
     pub fn star(&self) -> Self {
-        fn mk_star(r: &RegEx) -> RegEx {
-            match *r.root {
-                Operator::None | Operator::Epsilon => RegEx::new(Operator::Epsilon),
-                Operator::Star(_)                  => r.clone(),
-                _                                  => RegEx::new(Operator::Star(r.clone())),
-            }
+        match *self.root {
+            Operator::None | Operator::Epsilon => RegEx::new(Operator::Epsilon),
+            Operator::Star(_)                  => self.clone(),
+            _                                  => RegEx::new(Operator::Star(self.clone())),
         }
-
-        mk_star(self)
     }
 
     #[must_use]
     pub fn or(&self, other: &Self) -> Self {
-        fn mk_or(r: &RegEx, s: &RegEx) -> RegEx {
-            fn or_aux<'a, A, B>(res1: A, res2: B) -> RegEx
-            where
-                A: IntoIterator<Item=&'a RegEx>,
-                B: IntoIterator<Item=&'a RegEx>,
-            {
-                let refs = merged_sets(res1.into_iter().merge(res2), |mut a, b| { a.union_assign(b); a });
-        
-                if refs.is_empty() {
-                    RegEx::new(Operator::None)
-                } else if refs.len() == 1 {
-                    refs[0].clone()
-                } else {
-                    RegEx::new(Operator::Or(refs))
-                }
-            }
-        
-            match (r.operator(), s.operator()) {
-                (_               , Operator::None  ) => r.clone(),
-                (Operator::None  , _               ) => s.clone(),
-                (Operator::Set(x), Operator::Set(y)) => RegEx::set(x.union(&y)),
-                (Operator::Or(a) , Operator::Or(b) ) => or_aux(a, b),
-                (Operator::Or(a) , _               ) => or_aux(a, once(s)),
-                (_               , Operator::Or(b) ) => or_aux(once(r), b),
-                (_               , _               ) => or_aux(once(r), once(s)),
+        fn or_aux<'a, A, B>(res1: A, res2: B) -> RegEx
+        where
+            A: IntoIterator<Item=&'a RegEx>,
+            B: IntoIterator<Item=&'a RegEx>,
+        {
+            let refs = merged_sets(res1.into_iter().merge(res2), |mut a, b| { a.union_assign(b); a });
+    
+            if refs.is_empty() {
+                RegEx::new(Operator::None)
+            } else if refs.len() == 1 {
+                refs[0].clone()
+            } else {
+                RegEx::new(Operator::Or(refs))
             }
         }
-
-        mk_or(self, other)
+    
+        match (self.operator(), other.operator()) {
+            (_               , Operator::None  ) => self.clone(),
+            (Operator::None  , _               ) => other.clone(),
+            (Operator::Set(x), Operator::Set(y)) => RegEx::set(x.union(&y)),
+            (Operator::Or(a) , Operator::Or(b) ) => or_aux(a, b),
+            (Operator::Or(a) , _               ) => or_aux(a, once(other)),
+            (_               , Operator::Or(b) ) => or_aux(once(self), b),
+            (_               , _               ) => or_aux(once(self), once(other)),
+        }
     }
 
     #[must_use]
     pub fn and(&self, other: &Self) -> Self {
-        fn mk_and(r: &RegEx, s: &RegEx) -> RegEx {
-            fn and_aux<'a, A, B>(res1: A, res2: B) -> RegEx
-            where
-                A: IntoIterator<Item=&'a RegEx>,
-                B: IntoIterator<Item=&'a RegEx>,
-            {
-                let refs = merged_sets(res1.into_iter().merge(res2), |mut a, b| { a.intersection_assign(b); a });
-        
-                if refs.is_empty() {
-                    RegEx::new(Operator::None)
-                } else if refs.len() == 1 {
-                    refs[0].clone()
-                } else {
-                    RegEx::new(Operator::And(refs))
-                }
-            }
-        
-            match (r.operator(), s.operator()) {
-                (_                , Operator::None   ) => RegEx::new(Operator::None),
-                (Operator::None   , _                ) => RegEx::new(Operator::None),
-                (_                , Operator::Epsilon) => if r.is_nullable() { RegEx::new(Operator::Epsilon) } else { RegEx::new(Operator::None) }, // TODO: check
-                (Operator::Epsilon, _                ) => if s.is_nullable() { RegEx::new(Operator::Epsilon) } else { RegEx::new(Operator::None) }, // TODO: check
-                (Operator::Set(x) , Operator::Set(y) ) => RegEx::set(x.intersection(&y)),
-                (Operator::And(a) , Operator::And(b) ) => and_aux(a, b),
-                (Operator::And(a) , _                ) => and_aux(a, once(s)),
-                (_                , Operator::And(b) ) => and_aux(once(r), b),
-                (_                , _                ) => and_aux(once(r), once(s)),
+        fn and_aux<'a, A, B>(res1: A, res2: B) -> RegEx
+        where
+            A: IntoIterator<Item=&'a RegEx>,
+            B: IntoIterator<Item=&'a RegEx>,
+        {
+            let refs = merged_sets(res1.into_iter().merge(res2), |mut a, b| { a.intersection_assign(b); a });
+    
+            if refs.is_empty() {
+                RegEx::new(Operator::None)
+            } else if refs.len() == 1 {
+                refs[0].clone()
+            } else {
+                RegEx::new(Operator::And(refs))
             }
         }
-
-        mk_and(self, other)
+    
+        match (self.operator(), other.operator()) {
+            (_                , Operator::None   ) => RegEx::new(Operator::None),
+            (Operator::None   , _                ) => RegEx::new(Operator::None),
+            (_                , Operator::Epsilon) => if self.is_nullable() { RegEx::new(Operator::Epsilon) } else { RegEx::new(Operator::None) }, // TODO: check
+            (Operator::Epsilon, _                ) => if other.is_nullable() { RegEx::new(Operator::Epsilon) } else { RegEx::new(Operator::None) }, // TODO: check
+            (Operator::Set(x) , Operator::Set(y) ) => RegEx::set(x.intersection(&y)),
+            (Operator::And(a) , Operator::And(b) ) => and_aux(a, b),
+            (Operator::And(a) , _                ) => and_aux(a, once(other)),
+            (_                , Operator::And(b) ) => and_aux(once(self), b),
+            (_                , _                ) => and_aux(once(self), once(other)),
+        }
     }
 
     #[must_use]
     pub fn not(&self) -> Self {
-        fn mk_not(r: &RegEx) -> RegEx {
-            match r.operator() {
-                Operator::None   => RegEx::set(CharSet::universe()),
-                Operator::Set(s) => RegEx::set(s.complement()),
-                Operator::Not(a) => a.clone(),
-                _                => RegEx::new(Operator::Not(r.clone())),
-            }
+        match self.operator() {
+            Operator::None   => RegEx::set(CharSet::universe()),
+            Operator::Set(s) => RegEx::set(s.complement()),
+            Operator::Not(a) => a.clone(),
+            _                => RegEx::new(Operator::Not(self.clone())),
         }
-
-        mk_not(self)
     }
 
     // === non-canonical constructors ===
@@ -388,6 +364,6 @@ impl Debug for Operator {
 
 impl Debug for RegEx {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        f.write_str(&format!("{:?}", *self.root))
+        f.write_str(&format!("{:?}", self.operator()))
     }
 }
