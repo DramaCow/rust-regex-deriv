@@ -1,7 +1,7 @@
 use std::collections::{HashSet, HashMap, BTreeMap};
 use std::iter::once;
 
-use super::{CharSet, RegEx, Operator};
+use super::{ByteSet, RegEx, Operator};
 
 pub struct DFA {
     states: Vec<State>,
@@ -134,17 +134,17 @@ impl DFABuilder {
         }
     }
 
-    fn goto(&mut self, q: &RegExVec, i: usize, set: &CharSet) {
-        let c = set.min().unwrap();
+    fn goto(&mut self, q: &RegExVec, i: usize, set: &ByteSet) {
+        let c = set.smallest().unwrap();
         let qc = &q.deriv(c);
 
         if let Some(&j) = self.re2idx.get(qc) {
-            for a in set.chars() {
+            for a in set.bytes() {
                 self.states[i].next.insert(a, j);
             }
         } else {
             let j = self.add_state(qc);
-            for a in set.chars() {
+            for a in set.bytes() {
                 self.states[i].next.insert(a, j);
             }
             self.explore(qc, j);
@@ -152,7 +152,7 @@ impl DFABuilder {
     }
 }
 
-fn cross<'a, B: IntoIterator<Item = &'a CharSet>>(set1: &HashSet<CharSet>, set2: B) -> HashSet<CharSet> {
+fn cross<'a, B: IntoIterator<Item = &'a ByteSet>>(set1: &HashSet<ByteSet>, set2: B) -> HashSet<ByteSet> {
     set2.into_iter().flat_map(|t| {
         set1.iter().filter_map(move |s| {
             let u = t.intersection(&s);
@@ -162,9 +162,9 @@ fn cross<'a, B: IntoIterator<Item = &'a CharSet>>(set1: &HashSet<CharSet>, set2:
 }
 
 // TODO: memoize
-fn approx_deriv_classes(root: &RegEx) -> HashSet<CharSet> {
+fn approx_deriv_classes(root: &RegEx) -> HashSet<ByteSet> {
     let mut stack = vec![root];
-    let mut charsets: HashSet<CharSet> = once(CharSet::universe()).collect();
+    let mut charsets: HashSet<ByteSet> = once(ByteSet::universe()).collect();
     
     while let Some(node) = stack.pop() {
         match node.operator() {
@@ -202,8 +202,8 @@ fn approx_deriv_classes(root: &RegEx) -> HashSet<CharSet> {
     charsets
 }
 
-fn approx_deriv_classes_vec(root: &RegExVec) -> HashSet<CharSet> {
-    root.0.iter().fold(once(CharSet::universe()).collect(), |acc, x| {
+fn approx_deriv_classes_vec(root: &RegExVec) -> HashSet<ByteSet> {
+    root.0.iter().fold(once(ByteSet::universe()).collect(), |acc, x| {
         cross(&acc, &approx_deriv_classes(x))
     })
 }

@@ -6,8 +6,8 @@
 #![allow(clippy::similar_names)]
 #![warn(missing_docs)]
 
-mod char_set;
-pub use self::char_set::CharSet;
+mod byte_set;
+pub use self::byte_set::ByteSet;
 
 mod regex;
 pub use self::regex::{
@@ -36,7 +36,7 @@ pub use self::scan::{
 #[must_use]
 pub fn literal(s: &str) -> RegEx {
     s.bytes().fold(RegEx::empty(), |r, byte| {
-        r.then(&RegEx::set(CharSet::point(byte)))
+        r.then(&RegEx::set(ByteSet::point(byte)))
     })
 }
 
@@ -54,7 +54,7 @@ pub fn any(s: &str) -> RegEx {
 #[must_use]
 pub fn range(from: char, to: char) -> RegEx {
     fn range8(from: u8, to: u8) -> RegEx {
-        RegEx::set(CharSet::range(from, to))
+        RegEx::set(ByteSet::range(from, to))
     }
 
     #[allow(clippy::cast_possible_truncation)]

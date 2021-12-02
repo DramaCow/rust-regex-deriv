@@ -5,10 +5,9 @@ use std::iter::once;
 use std::fmt::Formatter;
 use std::fmt::Error;
 use std::fmt::Debug;
-use std::ops::Range;
 
 use itertools::Itertools;
-use super::CharSet;
+use super::ByteSet;
 
 /// Regular expression object. Internally, represented by an
 /// expression tree.
@@ -24,7 +23,7 @@ pub enum Operator {
 
     /// # Invariants
     /// * Set is not empty
-    Set(CharSet),
+    Set(ByteSet),
 
     /// # Invariants
     /// * At least 2 children
@@ -97,7 +96,7 @@ impl RegEx {
     }
 
     #[must_use]
-    pub fn set(a: CharSet) -> Self {
+    pub fn set(a: ByteSet) -> Self {
         if a.is_empty() {
             RegEx::new(Operator::None)
         } else {
@@ -143,7 +142,7 @@ impl RegEx {
             A: IntoIterator<Item=&'a RegEx>,
             B: IntoIterator<Item=&'a RegEx>,
         {
-            let refs = merged_sets(res1.into_iter().merge(res2), CharSet::union_assign);
+            let refs = merged_sets(res1.into_iter().merge(res2), |acc, other| *acc = acc.union(other));
     
             if refs.is_empty() {
                 RegEx::new(Operator::None)
@@ -172,7 +171,7 @@ impl RegEx {
             A: IntoIterator<Item=&'a RegEx>,
             B: IntoIterator<Item=&'a RegEx>,
         {
-            let refs = merged_sets(res1.into_iter().merge(res2), CharSet::intersection_assign);
+            let refs = merged_sets(res1.into_iter().merge(res2), |acc, other| *acc = acc.intersection(other));
     
             if refs.is_empty() {
                 RegEx::new(Operator::None)
@@ -199,7 +198,7 @@ impl RegEx {
     #[must_use]
     pub fn not(&self) -> Self {
         match self.operator() {
-            Operator::None   => RegEx::set(CharSet::universe()),
+            Operator::None   => RegEx::set(ByteSet::universe()),
             Operator::Set(s) => RegEx::set(s.complement()),
             Operator::Not(a) => a.clone(),
             _                => RegEx::new(Operator::Not(self.clone())),
@@ -340,7 +339,7 @@ impl RegEx {
 fn merged_sets<'a, T, F>(res: T, reduce: F) -> Vec<RegEx>
 where
     T: IntoIterator<Item=&'a RegEx>,
-    F: Fn(&mut CharSet, &CharSet),
+    F: Fn(&mut ByteSet, &ByteSet),
 {
     let mut reduced_set = None;
     let mut new_res: Vec<RegEx> = Vec::new();
