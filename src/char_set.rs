@@ -1,28 +1,20 @@
 #![allow(clippy::needless_range_loop)]
 
-type Word = u32; // type used for bitmap
-
-const NUM_WORDS: usize = 256 / Word::BITS as usize;
-
+/// Represents a set of 8-bit words. Internally uses a bitmap.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CharSet {
-    bitmap: [Word; NUM_WORDS],
+    bitmap: [u8; 32],
 }
 
 impl CharSet {
     #[must_use]
     pub fn empty() -> Self {
-        Self { bitmap: [0; NUM_WORDS] }
+        Self { bitmap: [0; 32] }
     }
 
     #[must_use]
     pub fn universe() -> Self {
-        Self { bitmap: [Word::MAX; NUM_WORDS] }
-    }
-
-    #[must_use]
-    fn words(&self) -> &[Word] {
-        &self.bitmap
+        Self { bitmap: [u8::MAX; 32] }
     }
 
     #[must_use]
@@ -47,7 +39,7 @@ impl CharSet {
         } else {
             set.bitmap[from_index] = first_word;
             for i in from_index+1..to_index {
-                set.bitmap[i] = Word::MAX;
+                set.bitmap[i] = u8::MAX;
             }
             set.bitmap[to_index] = last_word;
         }
@@ -61,12 +53,12 @@ impl CharSet {
 
     #[must_use]
     pub fn is_universe(&self) -> bool {
-        self.bitmap.iter().copied().all(|byte| byte == Word::MAX)
+        self.bitmap.iter().copied().all(|byte| byte == u8::MAX)
     }
 
     #[must_use]
     pub fn min(&self) -> Option<u8> {
-        let (index, word) = self.first_word()?;
+        let (index, word) = self.first()?;
         Some(decode(index, word))
     }
 
@@ -79,40 +71,36 @@ impl CharSet {
     #[must_use]
     pub fn complement(&self) -> Self {
         let mut set = Self::empty();
-        for i in 0..NUM_WORDS {
+        for i in 0..32 {
             set.bitmap[i] = !self.bitmap[i]
         }
         set
     }
 
-    #[must_use]
-    pub fn intersection(&self, other: &Self) -> Self {
-        let mut set = Self::empty();
-        for i in 0..NUM_WORDS {
-            set.bitmap[i] = self.bitmap[i] & other.bitmap[i]
-        }
-        set
-    }
-
     pub fn intersection_assign(&mut self, other: &Self) {
-        for i in 0..NUM_WORDS {
+        for i in 0..32 {
             self.bitmap[i] &= other.bitmap[i];
         }
     }
 
     #[must_use]
-    pub fn union(&self, other: &Self) -> Self {
-        let mut set = Self::empty();
-        for i in 0..NUM_WORDS {
-            set.bitmap[i] = self.bitmap[i] | other.bitmap[i]
-        }
+    pub fn intersection(&self, other: &Self) -> Self {
+        let mut set = self.clone();
+        set.intersection_assign(other);
         set
     }
 
     pub fn union_assign(&mut self, other: &Self) {
-        for i in 0..NUM_WORDS {
+        for i in 0..32 {
             self.bitmap[i] |= other.bitmap[i];
         }
+    }
+
+    #[must_use]
+    pub fn union(&self, other: &Self) -> Self {
+        let mut set = self.clone();
+        set.union_assign(other);
+        set
     }
 
     #[must_use]
@@ -120,15 +108,16 @@ impl CharSet {
         Chars::new(self)
     }
 
+    /// Returns encoding of first char in set.
     #[must_use]
-    fn first_word(&self) -> Option<(usize, Word)> {
-        self.words().iter().copied().enumerate().find(|&(_, word)| word != 0)
+    fn first(&self) -> Option<(usize, u8)> {
+        self.bitmap.iter().copied().enumerate().find(|&(_, word)| word != 0)
     }
 }
 
 impl std::fmt::Debug for CharSet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        for word in self.words() {
+        for word in self.bitmap {
             f.write_str(&format!("{:#010b} ", word)).unwrap();
         }
         Ok(())
@@ -138,12 +127,12 @@ impl std::fmt::Debug for CharSet {
 pub struct Chars<'a> {
     set: &'a CharSet,
     index: usize,
-    word: Word,
+    word: u8,
 }
 
 impl<'a> Chars<'a> {
     fn new(set: &'a CharSet) -> Self {
-        if let Some((index, word)) = set.first_word() {
+        if let Some((index, word)) = set.first() {
             Self { set, index, word }
         } else {
             Self { set, index: set.bitmap.len(), word: 0 }
@@ -156,7 +145,7 @@ impl Iterator for Chars<'_> {
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.word == 0 {
-            if self.index < NUM_WORDS - 1 {
+            if self.index < 32 - 1 {
                 self.index += 1;
                 self.word = self.set.bitmap[self.index];
                 self.next()
@@ -171,15 +160,16 @@ impl Iterator for Chars<'_> {
     }
 }
 
-#[allow(clippy::cast_possible_truncation, clippy::cast_lossless)]
-fn encode(value: u8) -> (usize, Word) {
-    let x = value as u32;
-    ((x / Word::BITS) as usize, 1 << (x % Word::BITS))
+fn encode(value: u8) -> (usize, u8) {
+    let x = value as usize;
+    (x / 8, 1 << (x % 8))
 }
 
 #[allow(clippy::cast_possible_truncation)]
-fn decode(index: usize, word: Word) -> u8 {
-    (Word::BITS * index as u32 + word.trailing_zeros()) as u8
+fn decode(index: usize, word: u8) -> u8 {
+    let index = index as u8;
+    let trailing = word.trailing_zeros() as u8;
+    8 * index + trailing
 }
 
 #[cfg(test)]

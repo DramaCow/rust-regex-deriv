@@ -6,6 +6,9 @@
 #![allow(clippy::similar_names)]
 #![warn(missing_docs)]
 
+mod char_set;
+pub use self::char_set::CharSet;
+
 mod regex;
 pub use self::regex::{
     RegEx,
@@ -50,12 +53,12 @@ pub fn any(s: &str) -> RegEx {
 /// Also accounts for char ranges that span different number of bytes.
 #[must_use]
 pub fn range(from: char, to: char) -> RegEx {
+    fn range8(from: u8, to: u8) -> RegEx {
+        RegEx::set(CharSet::range(from, to))
+    }
+
     #[allow(clippy::cast_possible_truncation)]
     fn range32(from: u32, to: u32, optional: bool) -> RegEx {
-        fn range8(from: u8, to: u8) -> RegEx {
-            RegEx::set(CharSet::range(from, to))
-        }
-    
         let (a_low, a_high) = (from as u8 + optional as u8, from >> 8);
         let (b_low, b_high) = (to as u8, to >> 8);
     
@@ -95,9 +98,6 @@ pub fn range(from: char, to: char) -> RegEx {
 // =================
 // === INTERNALS ===
 // =================
-
-mod char_set;
-use self::char_set::CharSet;
 
 #[cfg(test)]
 mod tests;

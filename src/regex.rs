@@ -5,6 +5,7 @@ use std::iter::once;
 use std::fmt::Formatter;
 use std::fmt::Error;
 use std::fmt::Debug;
+use std::ops::Range;
 
 use itertools::Itertools;
 use super::CharSet;
@@ -63,11 +64,33 @@ pub enum Operator {
 impl RegEx {
     // === canonical constructors ===
 
+    /// Constructs a regular expression representing the empty set, that is,
+    /// the language containing no strings (including epsilon).
+    /// 
+    /// # Examples
+    /// 
+    /// ```
+    /// # use regex_deriv::RegEx;
+    /// let re = RegEx::none();
+    /// assert!(!re.is_fullmatch("non-empty string"));
+    /// assert!(!re.is_fullmatch(""));
+    /// ```
     #[must_use]
     pub fn none() -> Self {
         Self::new(Operator::None)
     }
 
+    /// Constructs a regular expression representing the language only
+    /// containing epsilon.
+    ///
+    /// # Examples
+    /// 
+    /// ```
+    /// # use regex_deriv::RegEx;
+    /// let re = RegEx::empty();
+    /// assert!(!re.is_fullmatch("non-empty string"));
+    /// assert!(re.is_fullmatch(""));
+    /// ```
     #[must_use]
     pub fn empty() -> Self {
         Self::new(Operator::Epsilon)
@@ -120,7 +143,7 @@ impl RegEx {
             A: IntoIterator<Item=&'a RegEx>,
             B: IntoIterator<Item=&'a RegEx>,
         {
-            let refs = merged_sets(res1.into_iter().merge(res2), |mut a, b| { a.union_assign(b); a });
+            let refs = merged_sets(res1.into_iter().merge(res2), CharSet::union_assign);
     
             if refs.is_empty() {
                 RegEx::new(Operator::None)
@@ -149,7 +172,7 @@ impl RegEx {
             A: IntoIterator<Item=&'a RegEx>,
             B: IntoIterator<Item=&'a RegEx>,
         {
-            let refs = merged_sets(res1.into_iter().merge(res2), |mut a, b| { a.intersection_assign(b); a });
+            let refs = merged_sets(res1.into_iter().merge(res2), CharSet::intersection_assign);
     
             if refs.is_empty() {
                 RegEx::new(Operator::None)
@@ -290,6 +313,18 @@ impl RegEx {
             Operator::Not(re)  => !re.is_nullable(),
         }
     }
+
+    #[must_use]
+    pub fn is_fullmatch(&self, text: &str) -> bool {
+        let mut regex = self.clone();
+        for byte in text.bytes() {
+            regex = regex.deriv(byte);
+            if let Operator::None = regex.operator() {
+                return false;
+            }
+        }
+        regex.is_nullable()
+    }
 }
 
 // =================
@@ -302,30 +337,28 @@ impl RegEx {
     }
 }
 
-// TODO: improve
-fn merged_sets<'a, T, F>(res: T, f: F) -> Vec<RegEx>
+fn merged_sets<'a, T, F>(res: T, reduce: F) -> Vec<RegEx>
 where
     T: IntoIterator<Item=&'a RegEx>,
-    F: Fn(CharSet, &CharSet) -> CharSet,
+    F: Fn(&mut CharSet, &CharSet),
 {
-    let mut sets: Vec<&CharSet> = Vec::new();
-    let mut refs: Vec<&RegEx> = Vec::new();
+    let mut reduced_set = None;
+    let mut new_res: Vec<RegEx> = Vec::new();
 
     for re in res {
         if let Operator::Set(a) = re.operator() {
-            sets.push(a);
+            match &mut reduced_set {
+                Some(set) => reduce(set, a),
+                None      => reduced_set = Some(a.clone()),
+            }
         } else {
-            refs.push(re);
+            new_res.push(re.clone())
         }
     }
 
-    #[allow(clippy::option_if_let_else)]
-    if let Some(last) = sets.pop() {
-        let reduced_set = sets.into_iter().fold(last.clone(), |acc, x| f(acc, x));
-        let re = RegEx::new(Operator::Set(reduced_set));
-        refs.into_iter().merge(once(&re)).cloned().collect()
-    } else {
-        refs.into_iter().cloned().collect()
+    match reduced_set {
+        Some(set) => new_res.into_iter().merge(once(RegEx::new(Operator::Set(set)))).collect(),
+        None      => new_res
     }
 }
 
@@ -349,11 +382,9 @@ impl Debug for Operator {
             },
             Operator::Or(children) => {
                 f.write_str(&format!("({})", children.iter().map(|child| format!("{:?}", child)).collect::<Vec<_>>().join("|")))
-
             },
             Operator::And(children) => {
                 f.write_str(&format!("({})", children.iter().map(|child| format!("{:?}", child)).collect::<Vec<_>>().join("&")))
-
             },
             Operator::Not(child) => {
                 f.write_str(&format!("!({:?})", child))
