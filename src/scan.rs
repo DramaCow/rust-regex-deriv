@@ -1,5 +1,5 @@
 use std::ops::Range;
-use super::{Command, LexTable};
+use super::LexTable;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Token {
@@ -32,9 +32,10 @@ impl<'a, S: LexTable> Scan<'a, S> {
 impl<'a, S: LexTable> Iterator for Scan<'a, S> {
     type Item = Result<Token, ScanError>;
 
+    #[allow(clippy::option_if_let_else)]
     fn next(&mut self) -> Option<Self::Item> {       
-        while self.index < self.input.as_ref().len() {
-            let mut state = 0;
+        if self.index < self.input.as_ref().len() {
+            let mut state = S::START_STATE;
             let mut index = self.index;
             
             let mut last_accept_state = self.table.sink();
@@ -59,29 +60,20 @@ impl<'a, S: LexTable> Iterator for Scan<'a, S> {
             if let Some(class) = self.table.class(state) {
                 let i = self.index;
                 self.index = index;
-
-                match self.table.command(class) {
-                    Command::Emit => return Some(Ok(Token { span: i..self.index, class })),
-                    Command::Skip => (),
-                };
+                Some(Ok(Token { span: i..self.index, class }))
             // landed on an accept state in the past
             } else if let Some(class) = self.table.class(last_accept_state) {
                 let i = self.index;
                 self.index = last_accept_index;
-
-                match self.table.command(class) {
-                    Command::Emit => return Some(Ok(Token { span: i..self.index, class })), 
-                    Command::Skip => (),
-                };
+                Some(Ok(Token { span: i..self.index, class }))
             // failed to match anything
             } else {
                 let i = self.index;
                 self.index = usize::MAX; // forces next iteration to return None
-
-                return Some(Err(ScanError { pos: i }));
+                Some(Err(ScanError { pos: i }))
             }
-        };
-        
-        None
+        } else {
+            None
+        }
     }
 }

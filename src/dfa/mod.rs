@@ -8,8 +8,8 @@ pub struct DFA {
 }
 
 pub struct State {
-    pub class: Option<usize>,
     pub next: HashMap<u8, usize>,
+    pub class: Option<usize>,
 }
 
 impl From<&RegEx> for DFA {
@@ -66,8 +66,8 @@ impl DFA {
 impl State {
     fn new(next: HashMap<u8, usize>, class: Option<usize>) -> Self {
         Self {
-            class,
             next,
+            class,
         }
     }
 
