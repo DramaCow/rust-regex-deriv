@@ -1,0 +1,45 @@
+use std::str::FromStr;
+use regex_deriv::{literal, RegEx, ByteSet};
+use crate::utils::range;
+
+grammar;
+
+match {
+    r"[^^*+?|()~&\s\[\]-]" => CHAR,
+    _
+}
+
+pub CharClass: RegEx = {
+    "[" "]" => {
+        RegEx::empty()
+    },
+    "[" <r:CC_Atom_1> <rs:CC_Atom_2*> "]" => {
+        rs.into_iter().fold(r, |acc, regex| acc.or(&regex))
+    },
+    "[" "^" <CC_Atom_2*> "]" => {
+        match <>.into_iter().reduce(|acc, regex| acc.or(&regex)) {
+            Some(regex) => todo!(),
+            None => todo!(),
+        }
+    },
+}
+
+pub CC_Atom_1: RegEx = {
+    <a:CC_Char_1> "-" <b:CC_Char_2> => { range(a, b) },
+    <CC_Char_1> => { literal(<>) },
+    CharClass,
+}
+
+pub CC_Atom_2: RegEx = {
+    <a:CC_Char_2> "-" <b:CC_Char_2> => { range(a, b) },
+    <CC_Char_2> => { literal(<>) },
+    CharClass,
+}
+
+pub CC_Char_1 = {
+    CHAR, "*", "+", "?",
+}
+
+pub CC_Char_2 = {
+    CHAR, "*", "+", "?", "^",
+}
