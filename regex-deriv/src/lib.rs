@@ -31,26 +31,6 @@ pub use self::scan::{
     ScanError
 };
 
-/// Constructs a `RegEx` that recognizes some input string only.
-#[must_use]
-pub fn literal(s: &str) -> RegEx {
-    s.bytes().fold(RegEx::empty(), |r, byte| {
-        r.then(&RegEx::set(ByteSet::point(byte)))
-    })
-}
-
-/// Constructs a `RegEx` that recognizes any char in a string.
-#[must_use]
-pub fn any(s: &str) -> RegEx {
-    s.chars().fold(RegEx::empty(), |r, c| {
-        let mut buffer: [u8; 4] = [0; 4];
-        r.or(&literal(c.encode_utf8(&mut buffer)))
-    })
-}
-
-// Constructs a `RegEx` that recognizes all chars within a provided range (inclusive).
-// Also accounts for char ranges that span different number of bytes.
-
 // =================
 // === INTERNALS ===
 // =================

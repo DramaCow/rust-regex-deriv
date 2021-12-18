@@ -176,6 +176,7 @@ impl RegEx {
         }
     }
 
+    // aka. Kleene closure
     #[must_use]
     pub fn star(&self) -> Self {
         match *self.root {
@@ -248,8 +249,7 @@ impl RegEx {
     #[must_use]
     pub fn not(&self) -> Self {
         match self.operator() {
-            Operator::None   => RegEx::set(ByteSet::universe()),
-            Operator::Set(s) => RegEx::set(s.complement()),
+            Operator::None   => RegEx::set(ByteSet::universe()).star(),
             Operator::Not(a) => a.clone(),
             _                => RegEx::new(Operator::Not(self.clone())),
         }

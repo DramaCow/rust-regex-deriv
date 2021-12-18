@@ -8,7 +8,7 @@ use super::Scan;
 fn approx_eq() {
     let re1 = RegEx::set(ByteSet::range(3, 17).complement());
     let re2 = RegEx::set(ByteSet::range(3, 17)).not();
-    assert_eq!(re1, re2);
+    assert_ne!(re1, re2);
 }
 
 #[test]
@@ -24,15 +24,16 @@ fn derivative() {
 #[test]
 fn simple_lexer() {
     let table = NaiveLexTable::new(&DFA::from(&[
-        super::any(" ,").plus(),
-        super::any("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz").plus(),
+        RegEx::set(ByteSet::point(' ' as u8).union(&ByteSet::point(',' as u8))).plus(),
+        // RegEx::set(ByteSet::range('A' as u8, 'Z' as u8)),
+        RegEx::set(ByteSet::range('a' as u8, 'z' as u8)).plus(),
     ]).minimize());
-    let text = "Waltz, bad nymph, for quick jigs vex";
+    let text = "waltz, bad nymph, for quick jigs vex";
 
-    let tokens: Vec<_> = Scan::new(&table, &text).collect::<Result<_, _>>().unwrap();
+    let tokens: Vec<_> = Scan::new(&table, &text).take(14).collect::<Result<_, _>>().unwrap();
     let tokens: Vec<_> = tokens.into_iter().filter(|token| token.class != 0).collect();
 
-    assert_eq!(&text[tokens[0].span.clone()], "Waltz");
+    assert_eq!(&text[tokens[0].span.clone()], "waltz");
     assert_eq!(&text[tokens[1].span.clone()], "bad");
     assert_eq!(&text[tokens[2].span.clone()], "nymph");
     assert_eq!(&text[tokens[3].span.clone()], "for");
@@ -40,4 +41,14 @@ fn simple_lexer() {
     assert_eq!(&text[tokens[5].span.clone()], "jigs");
     assert_eq!(&text[tokens[6].span.clone()], "vex");
     assert!(tokens.iter().all(|token| token.class == 1));
+}
+
+#[test]
+fn fail_lexer() {
+    let table = NaiveLexTable::new(&DFA::from(&[
+        RegEx::set(ByteSet::range('A' as u8, 'Z' as u8)),
+    ]).minimize());
+    let text = "bad";
+    let res = Scan::new(&table, &text).next().unwrap();
+    assert!(res.is_err());
 }

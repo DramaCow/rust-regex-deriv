@@ -1,6 +1,6 @@
 use std::str::FromStr;
-use regex_deriv::{literal, RegEx, ByteSet};
-use crate::utils::range;
+use regex_deriv::{RegEx, ByteSet};
+use crate::utils::{literal, range};
 
 grammar;
 
@@ -9,14 +9,46 @@ match {
     _
 }
 
-pub CharClass: RegEx = {
+pub Expr: RegEx = {
+    <r:Clause> <rs:("|" <Clause>)*> => {
+        rs.into_iter().fold(r, |acc, regex| acc.or(&regex))
+    }
+}
+
+Clause: RegEx = {
+    <r:Seq> <rs:("&" <Seq>)*> => {
+        rs.into_iter().fold(r, |acc, regex| acc.and(&regex))
+    }
+}
+
+Seq: RegEx = {
+    <Term+> => {
+        <>.into_iter().reduce(|acc, regex| acc.then(&regex)).unwrap()
+    }
+}
+
+Term: RegEx = {
+    <Factor> "?" => <>.opt(),
+    <Factor> "*" => <>.star(),
+    <Factor> "+" => <>.plus(),
+    "~" <Factor> => <>.not(),
+    Factor,
+}
+
+Factor: RegEx = {
+    "(" <Expr> ")",
+    CharClass,
+    <CHAR> => literal(<>),
+}
+
+CharClass: RegEx = {
     "[" "]" => {
-        RegEx::empty()
+        panic!("character set cannot be empty")
     },
-    "[" <r:CC_Atom_1> <rs:CC_Atom_2*> "]" => {
+    "[" <r:CCStart> <rs:CCContinue*> "]" => {
         rs.into_iter().fold(r, |acc, regex| acc.or(&regex))
     },
-    "[" "^" <CC_Atom_2*> "]" => {
+    "[" "^" <CCContinue*> "]" => {
         match <>.into_iter().reduce(|acc, regex| acc.or(&regex)) {
             Some(regex) => todo!(),
             None => todo!(),
@@ -24,22 +56,22 @@ pub CharClass: RegEx = {
     },
 }
 
-pub CC_Atom_1: RegEx = {
-    <a:CC_Char_1> "-" <b:CC_Char_2> => { range(a, b) },
-    <CC_Char_1> => { literal(<>) },
+CCStart: RegEx = {
+    <a:CHAR1> "-" <b:CHAR2> => range(a, b),
+    <CHAR1> => literal(<>),
     CharClass,
 }
 
-pub CC_Atom_2: RegEx = {
-    <a:CC_Char_2> "-" <b:CC_Char_2> => { range(a, b) },
-    <CC_Char_2> => { literal(<>) },
+CCContinue: RegEx = {
+    <a:CHAR2> "-" <b:CHAR2> => range(a, b),
+    <CHAR2> => literal(<>),
     CharClass,
 }
 
-pub CC_Char_1 = {
+CHAR1 = {
     CHAR, "*", "+", "?",
 }
 
-pub CC_Char_2 = {
-    CHAR, "*", "+", "?", "^",
+CHAR2 = {
+    CHAR1, "^",
 }
