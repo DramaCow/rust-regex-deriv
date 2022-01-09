@@ -5,26 +5,25 @@ use crate::utils::{literal, range};
 grammar;
 
 match {
-    r"[^^*+?|()~&\s\[\]-]" => CHAR,
+    r"[^^+*?|()~&\s\[\]-]" => NON_PUNCT,
+    r"\\[.+*?()|&~\[\]{}^-]" => ESC_PUNCT,
     _
 }
 
 pub Expr: RegEx = {
-    <r:Clause> <rs:("|" <Clause>)*> => {
-        rs.into_iter().fold(r, |acc, regex| acc.or(&regex))
-    }
+    <r:Expr> "|" <s:Clause> => r.or(&s),
+    Clause,
 }
 
 Clause: RegEx = {
-    <r:Seq> <rs:("&" <Seq>)*> => {
-        rs.into_iter().fold(r, |acc, regex| acc.and(&regex))
-    }
+    <r:Clause> "&" <s:Seq> => r.and(&s),
+    <r:Clause> "-" <s:Seq> => r.diff(&s),
+    Seq,
 }
 
 Seq: RegEx = {
-    <Term+> => {
-        <>.into_iter().reduce(|acc, regex| acc.then(&regex)).unwrap()
-    }
+    <r:Seq> <s:Term> => r.then(&s),
+    Term
 }
 
 Term: RegEx = {
@@ -38,17 +37,17 @@ Term: RegEx = {
 Factor: RegEx = {
     "(" <Expr> ")",
     CharClass,
-    <CHAR> => literal(<>),
+    <NON_PUNCT> => literal(<>),
 }
 
 CharClass: RegEx = {
     "[" "]" => {
         panic!("character set cannot be empty")
     },
-    "[" <r:CCStart> <rs:CCContinue*> "]" => {
+    "[" <r:CCItemStart> <rs:CCItem*> "]" => {
         rs.into_iter().fold(r, |acc, regex| acc.or(&regex))
     },
-    "[" "^" <CCContinue*> "]" => {
+    "[" "^" <CCItem*> "]" => {
         match <>.into_iter().reduce(|acc, regex| acc.or(&regex)) {
             Some(regex) => todo!(),
             None => todo!(),
@@ -56,22 +55,30 @@ CharClass: RegEx = {
     },
 }
 
-CCStart: RegEx = {
-    <a:CHAR1> "-" <b:CHAR2> => range(a, b),
-    <CHAR1> => literal(<>),
+CCItemStart: RegEx = {
+    <a:CCCharStart> "-" <b:CCChar> => range(a, b),
+    <CCCharStart> => literal(<>),
     CharClass,
 }
 
-CCContinue: RegEx = {
-    <a:CHAR2> "-" <b:CHAR2> => range(a, b),
-    <CHAR2> => literal(<>),
+CCItem: RegEx = {
+    <a:CCChar> "-" <b:CCChar> => range(a, b),
+    <CCChar> => literal(<>),
     CharClass,
 }
 
-CHAR1 = {
-    CHAR, "*", "+", "?",
+CCCharStart = {
+    Char,
+    "*", "+", "?",
 }
 
-CHAR2 = {
-    CHAR1, "^",
+CCChar = {
+    Char,
+    "*", "+", "?",
+    "^",
+}
+
+Char = {
+    NON_PUNCT,
+    ESC_PUNCT => &<>[1..],
 }

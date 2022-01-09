@@ -10,5 +10,8 @@ lalrpop = "0.19.6"
 regex-deriv = { path = "../regex-deriv" }
 lalrpop-util = "0.19.6"
 
+[dev-dependencies]
+regex = "1"
+
 [profile.release]
 debug = 1
