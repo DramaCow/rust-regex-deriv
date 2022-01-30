@@ -1,6 +1,6 @@
 use std::str::FromStr;
 use regex_deriv::{RegEx, ByteSet};
-use crate::utils::{literal, range};
+use crate::{literal, utils::range};
 
 grammar;
 

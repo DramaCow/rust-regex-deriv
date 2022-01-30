@@ -24,9 +24,9 @@ fn derivative() {
 #[test]
 fn simple_lexer() {
     let table = NaiveLexTable::new(&DFA::from(&[
-        RegEx::set(ByteSet::point(' ' as u8).union(&ByteSet::point(',' as u8))).plus(),
+        RegEx::set(ByteSet::point(b' ').union(&ByteSet::point(b','))).plus(),
         // RegEx::set(ByteSet::range('A' as u8, 'Z' as u8)),
-        RegEx::set(ByteSet::range('a' as u8, 'z' as u8)).plus(),
+        RegEx::set(ByteSet::range(b'a', b'z')).plus(),
     ]).minimize());
     let text = "waltz, bad nymph, for quick jigs vex";
 
@@ -46,7 +46,7 @@ fn simple_lexer() {
 #[test]
 fn fail_lexer() {
     let table = NaiveLexTable::new(&DFA::from(&[
-        RegEx::set(ByteSet::range('A' as u8, 'Z' as u8)),
+        RegEx::set(ByteSet::range(b'A', b'Z')),
     ]).minimize());
     let text = "bad";
     let res = Scan::new(&table, &text).next().unwrap();

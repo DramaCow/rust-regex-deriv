@@ -1,11 +1,4 @@
-use regex_deriv::{RegEx, ByteSet};
-
-// Constructs a `RegEx` that recognizes some input string only.
-pub fn literal(s: &str) -> RegEx {
-    s.bytes().fold(RegEx::empty(), |r, byte| {
-        r.then(&RegEx::set(ByteSet::point(byte)))
-    })
-}
+use regex_deriv::RegEx;
 
 // Constructs a `RegEx` that recognizes all chars within a provided range (inclusive).
 // Also accounts for char ranges that span different number of bytes. Inputs must be
